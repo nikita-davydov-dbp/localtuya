@@ -478,7 +478,7 @@ class LocalTuyaEntity(RestoreEntity, pytuya.ContextualLogger):
         """Return if device is available or not."""
         return str(self._dp_id) in self._status
 
-    def dps(self, dp_index):
+    def dps(self, dp_index, scale_factor=None):
         """Return cached value for DPS index."""
         value = self._status.get(str(dp_index))
         if value is None:
@@ -486,7 +486,9 @@ class LocalTuyaEntity(RestoreEntity, pytuya.ContextualLogger):
                 "Entity %s is requesting unknown DPS index %s",
                 self.entity_id,
                 dp_index,
-            )
+            )        
+        elif scale_factor is not None:
+            value = value * scale_factor
 
         return value
 

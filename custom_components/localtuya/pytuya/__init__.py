@@ -166,6 +166,9 @@ HEARTBEAT_INTERVAL = 10
 # DPS that are known to be safe to use with update_dps (0x12) command
 UPDATE_DPS_WHITELIST = [18, 19, 20]  # Socket (Wi-Fi)
 
+DETECT_MAX_WAIT = 20
+
+
 # Tuya Device Dictionary - Command and Payload Overrides
 # This is intended to match requests.json payload at
 # https://github.com/codetheweb/tuyapi :
@@ -853,6 +856,7 @@ class TuyaProtocol(asyncio.Protocol, ContextualLogger):
         # different steps due to request payload limitation (max. length = 255)
         self.dps_cache = {}
         ranges = [(2, 11), (11, 21), (21, 31), (100, 111)]
+        started = time.time()
 
         for dps_range in ranges:
             # dps 1 must always be sent, otherwise it might fail in case no dps is found
@@ -868,7 +872,11 @@ class TuyaProtocol(asyncio.Protocol, ContextualLogger):
                 self.dps_cache.update(data["dps"])
 
             if self.dev_type == "type_0a":
-                return self.dps_cache
+                break
+
+        self.debug("Waiting for periodic dps")
+        await asyncio.sleep(started + DETECT_MAX_WAIT - time.time())
+
         self.debug("Detected dps: %s", self.dps_cache)
         return self.dps_cache
 
@@ -964,6 +972,16 @@ class TuyaProtocol(asyncio.Protocol, ContextualLogger):
             and "dps" in json_payload["data"]
         ):
             json_payload["dps"] = json_payload["data"]["dps"]
+        
+        try:
+            if "dps" in json_payload and "6" in json_payload["dps"] and len(json_payload["dps"]["6"]) == 12:
+                val = base64.b64decode(json_payload["dps"]["6"])
+                json_payload["dps"]["6001"] = int.from_bytes(val[2:5], "big")
+                json_payload["dps"]["6002"] = int.from_bytes(val[5:8], "big") * 10
+                json_payload["dps"]["6003"] = int.from_bytes(val[0:2], "big")
+                del json_payload["dps"]["6"]
+        except binascii.Error:
+            pass
 
         return json_payload
 
